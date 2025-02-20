@@ -1,31 +1,36 @@
+import { HttpStatus } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Event } from './event/event';
-import { Handler } from 'aws-lambda';
+import { Callback, Context, Handler } from 'aws-lambda';
 
-export const handler: Handler = process.env.IS_STANDALONE
-  ? async (event: any) => {
-      console.log(`REQUEST | event:`, JSON.stringify(event, null, 2));
+export const handler: Handler = process.env.IS_STANDALONE === '1' ? async (
+  event: any,
+  context: Context,
+  callback: Callback,
+) => {
+  console.log(`REQUEST | event:`, JSON.stringify(event, null, 2));
 
-      const appContext = await NestFactory.createApplicationContext(AppModule);
-      const eventService = appContext.get(Event);
+  const appContext = await NestFactory.createApplicationContext(AppModule);
+  const eventService = appContext.get(Event);
 
-      let result;
+  let result;
 
-      try {
-        result = eventService.handleEvent(JSON.parse(event.body));
-        return {
-          body: result,
-          statusCode: 200,
-        };
-      } catch (error: any) {
-        return {
-          body: error?.message,
-          statusCode: 500,
-        };
-      }
-    }
-  : undefined;
+  try {
+    result = await eventService.handleEvent(JSON.parse(event.body));
+    console.log('RESPONSE | result:', result);
+    return {
+      body: JSON.stringify(result),
+      statusCode: HttpStatus.OK,
+    };
+  } catch (error: any) {
+    console.error(error);
+    return {
+      body: error?.message,
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    };
+  }
+} : undefined
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
